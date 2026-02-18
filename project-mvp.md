@@ -452,12 +452,12 @@ Authentication system remains untouched when new providers are added.
 
 💬 Rooms & Chat (After Shell Exists)
 
-- [ ]  Implement project model
-- [ ]  Implement room model
-- [ ]  Connect room selection to sidebar
-- [ ]  Implement real-time chat (WebSocket)
-- [ ]  Connect chat to authenticated user
-- [ ]  Persist messages in DB
+- [x]  Implement project model
+- [x]  Implement room model
+- [x]  Connect room selection to sidebar
+- [x]  Implement real-time chat (WebSocket)
+- [x]  Connect chat to authenticated user
+- [x]  Persist messages in DB
 
 🖥 Electron Authentication Flow
 

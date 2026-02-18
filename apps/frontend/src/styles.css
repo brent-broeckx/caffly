@@ -30,8 +30,8 @@ body {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: linear-gradient(rgba(129, 145, 214, 0.06) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(129, 145, 214, 0.06) 1px, transparent 1px);
+    background-image: linear-gradient(rgba(196, 137, 84, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(196, 137, 84, 0.08) 1px, transparent 1px);
     background-size: 42px 42px;
     mask-image: radial-gradient(circle at 50% 35%, black, transparent 95%);
   }
@@ -45,7 +45,7 @@ body {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    box-shadow: inset 0 0 0 1px rgba(148, 172, 255, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(251, 146, 60, 0.16);
     pointer-events: none;
   }
 
@@ -54,7 +54,7 @@ body {
   }
 
   .nav-item-active {
-    @apply border-accent-blue/60 bg-accent-blue/20 text-surface-text shadow-neon;
+    @apply border-accent-warning/60 bg-accent-warning/20 text-surface-text shadow-neon;
   }
 
   .dashboard-card {
