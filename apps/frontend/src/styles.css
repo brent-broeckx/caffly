@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply m-0 overflow-hidden bg-surface-base text-surface-text antialiased;
+  font-family: Inter, "Segoe UI", sans-serif;
+}
+
+#root {
+  @apply h-screen w-screen;
+}
+
+@layer components {
+  .app-background {
+    @apply relative h-screen w-screen bg-surface-base bg-futuristic-glow;
+  }
+
+  .app-background::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: linear-gradient(rgba(129, 145, 214, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(129, 145, 214, 0.06) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: radial-gradient(circle at 50% 35%, black, transparent 95%);
+  }
+
+  .panel-surface {
+    @apply relative rounded-2xl border border-surface-border bg-surface-panel/85 shadow-panel backdrop-blur-xl;
+  }
+
+  .panel-surface::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1px rgba(148, 172, 255, 0.12);
+    pointer-events: none;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-sm text-surface-muted transition;
+  }
+
+  .nav-item-active {
+    @apply border-accent-blue/60 bg-accent-blue/20 text-surface-text shadow-neon;
+  }
+
+  .dashboard-card {
+    @apply panel-surface p-4;
+  }
+
+  .status-chip {
+    @apply inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium;
+  }
+}
