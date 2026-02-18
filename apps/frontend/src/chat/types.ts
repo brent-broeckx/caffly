@@ -8,6 +8,7 @@ export type SidebarProject = {
   id: string;
   name: string;
   slug: string;
+  memberRole: string;
   rooms: SidebarRoom[];
 };
 

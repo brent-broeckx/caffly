@@ -48,11 +48,15 @@ export async function isUserRoomMember(params: {
   userId: string;
   roomId: string;
 }): Promise<boolean> {
-  const membership = await prisma.roomMember.findUnique({
+  const membership = await prisma.roomMember.findFirst({
     where: {
-      roomId_userId: {
-        roomId: params.roomId,
-        userId: params.userId
+      roomId: params.roomId,
+      userId: params.userId,
+      room: {
+        deletedAt: null,
+        project: {
+          deletedAt: null
+        }
       }
     },
     select: { id: true }
@@ -75,10 +79,62 @@ export async function listRoomMessagesForUser(params: {
     throw new Error("User is not a room member");
   }
 
+  const room = await prisma.room.findFirst({
+    where: {
+      id: params.roomId,
+      deletedAt: null,
+      project: {
+        deletedAt: null
+      }
+    },
+    select: {
+      id: true,
+      projectId: true
+    }
+  });
+
+  if (!room) {
+    throw new Error("Room not found");
+  }
+
+  await prisma.projectMember.updateMany({
+    where: {
+      projectId: room.projectId,
+      userId: params.userId,
+      hiddenAt: {
+        not: null
+      }
+    },
+    data: {
+      hiddenAt: null
+    }
+  });
+
+  await prisma.roomMember.updateMany({
+    where: {
+      roomId: room.id,
+      userId: params.userId,
+      hiddenAt: {
+        not: null
+      }
+    },
+    data: {
+      hiddenAt: null
+    }
+  });
+
   const limit = Math.min(Math.max(params.limit ?? 100, 1), 200);
 
   const messages = await prisma.message.findMany({
-    where: { roomId: params.roomId },
+    where: {
+      roomId: params.roomId,
+      room: {
+        deletedAt: null,
+        project: {
+          deletedAt: null
+        }
+      }
+    },
     orderBy: { createdAt: "asc" },
     take: limit,
     include: {

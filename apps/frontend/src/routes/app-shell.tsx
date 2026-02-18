@@ -2,11 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   buildChatWebSocketUrl,
+  createProjectRoom,
+  createWorkspaceRoom,
+  deleteProject,
+  deleteRoom,
   fetchRoomMessages,
   fetchSidebarData,
+  setProjectVisibility,
+  setRoomVisibility,
   sendRoomMessage
 } from "../chat/api.js";
-import type { ChatMessage, ChatWsIncoming, SidebarProject, SidebarRoom } from "../chat/types.js";
+import type { ChatMessage, ChatWsIncoming, SidebarProject } from "../chat/types.js";
 import { resolveApiBaseUrl } from "../auth/url.js";
 import { TeamChatPanel } from "./chat/team-chat-panel.js";
 import { OverviewDashboard } from "./overview/overview-dashboard.js";
@@ -39,20 +45,6 @@ function findSelectedRoomName(projects: SidebarProject[], roomId: string | null)
   return "Unknown room";
 }
 
-function buildRoomChannels(room: SidebarRoom): string[] {
-  const normalizedName = room.name.toLowerCase();
-
-  if (normalizedName.includes("general")) {
-    return ["chat", "announcements", "resources"];
-  }
-
-  if (normalizedName.includes("sync")) {
-    return ["chat", "standup", "notes"];
-  }
-
-  return ["chat", "threads", "updates"];
-}
-
 export function AppShellPage() {
   const [activeSection, setActiveSection] = useState<NavSection>("Overview");
   const [projects, setProjects] = useState<SidebarProject[]>([]);
@@ -64,7 +56,9 @@ export function AppShellPage() {
   const [sidebarError, setSidebarError] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set());
-  const [expandedRoomIds, setExpandedRoomIds] = useState<Set<string>>(new Set());
+  const [creatingProjectId, setCreatingProjectId] = useState<string | null>(null);
+  const [deletingTargetId, setDeletingTargetId] = useState<string | null>(null);
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
 
   const apiBaseUrl = useMemo(() => resolveApiBaseUrl(), []);
   const selectedRoomIdRef = useRef<string | null>(null);
@@ -84,6 +78,7 @@ export function AppShellPage() {
           return;
         }
 
+        setSidebarError(null);
         setProjects(payload.projects);
         setSelectedRoomId((current) => {
           if (current) {
@@ -98,14 +93,9 @@ export function AppShellPage() {
         });
 
         const firstProject = payload.projects[0];
-        const firstRoom = firstProject?.rooms[0];
 
         if (firstProject) {
           setExpandedProjectIds(new Set([firstProject.id]));
-        }
-
-        if (firstRoom) {
-          setExpandedRoomIds(new Set([firstRoom.id]));
         }
       })
       .catch((error) => {
@@ -316,24 +306,189 @@ export function AppShellPage() {
     });
   }
 
-  function toggleRoom(roomId: string): void {
-    setExpandedRoomIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(roomId)) {
-        next.delete(roomId);
-      } else {
-        next.add(roomId);
-      }
-
-      return next;
-    });
-  }
-
   function selectRoom(roomId: string): void {
+    setOpenActionMenuId(null);
     selectedRoomIdRef.current = roomId;
     setSelectedRoomId(roomId);
     setActiveSection("Team Chat");
+  }
+
+  function toggleActionMenu(menuId: string): void {
+    setOpenActionMenuId((current) => (current === menuId ? null : menuId));
+  }
+
+  function resolveNextSelectedRoomId(nextProjects: SidebarProject[], preferredRoomId: string | null): string | null {
+    if (preferredRoomId) {
+      const hasPreferred = nextProjects.some((project) =>
+        project.rooms.some((room) => room.id === preferredRoomId)
+      );
+
+      if (hasPreferred) {
+        return preferredRoomId;
+      }
+    }
+
+    return nextProjects.flatMap((project) => project.rooms)[0]?.id ?? null;
+  }
+
+  async function reloadSidebar(params?: {
+    preferredRoomId?: string | null;
+    expandProjectId?: string;
+  }): Promise<void> {
+    const payload = await fetchSidebarData(apiBaseUrl);
+    const nextSelectedRoomId = resolveNextSelectedRoomId(
+      payload.projects,
+      params?.preferredRoomId ?? selectedRoomIdRef.current
+    );
+
+    setProjects(payload.projects);
+    setSelectedRoomId(nextSelectedRoomId);
+    selectedRoomIdRef.current = nextSelectedRoomId;
+
+    const expandProjectId = params?.expandProjectId;
+
+    if (expandProjectId) {
+      setExpandedProjectIds((current) => {
+        const next = new Set(current);
+        next.add(expandProjectId);
+
+        return next;
+      });
+    }
+
+    if (!nextSelectedRoomId) {
+      setMessages([]);
+    }
+
+    setOpenActionMenuId(null);
+  }
+
+  async function handleCreateRoom(projectId: string): Promise<void> {
+    const roomName = window.prompt("Room name");
+
+    if (!roomName?.trim()) {
+      return;
+    }
+
+    setCreatingProjectId(projectId);
+
+    try {
+      const createdRoom = await createProjectRoom(apiBaseUrl, projectId, roomName.trim());
+      await reloadSidebar({
+        preferredRoomId: createdRoom.id,
+        expandProjectId: projectId
+      });
+      setActiveSection("Team Chat");
+      setSidebarError(null);
+      setChatError(null);
+      setOpenActionMenuId(null);
+    } catch (error) {
+      setSidebarError(error instanceof Error ? error.message : "Unable to create room");
+    } finally {
+      setCreatingProjectId(null);
+    }
+  }
+
+  async function handleCreateWorkspaceRoom(): Promise<void> {
+    const roomName = window.prompt("Room name");
+
+    if (!roomName?.trim()) {
+      return;
+    }
+
+    setCreatingProjectId("workspace");
+
+    try {
+      const created = await createWorkspaceRoom(apiBaseUrl, roomName.trim());
+      await reloadSidebar({
+        preferredRoomId: created.room.id,
+        expandProjectId: created.project.id
+      });
+      setActiveSection("Team Chat");
+      setSidebarError(null);
+      setChatError(null);
+      setOpenActionMenuId(null);
+    } catch (error) {
+      setSidebarError(error instanceof Error ? error.message : "Unable to create room");
+    } finally {
+      setCreatingProjectId(null);
+    }
+  }
+
+  async function handleDeleteProject(projectId: string): Promise<void> {
+    const shouldDelete = window.confirm("Delete this project and all its rooms from your sidebar?");
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeletingTargetId(projectId);
+
+    try {
+      await deleteProject(apiBaseUrl, projectId);
+      await reloadSidebar();
+      setSidebarError(null);
+      setChatError(null);
+      setOpenActionMenuId(null);
+    } catch (error) {
+      setSidebarError(error instanceof Error ? error.message : "Unable to delete project");
+    } finally {
+      setDeletingTargetId(null);
+    }
+  }
+
+  async function handleDeleteRoom(roomId: string): Promise<void> {
+    const shouldDelete = window.confirm("Delete this room from your sidebar?");
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeletingTargetId(roomId);
+
+    try {
+      await deleteRoom(apiBaseUrl, roomId);
+      await reloadSidebar();
+      setSidebarError(null);
+      setChatError(null);
+      setOpenActionMenuId(null);
+    } catch (error) {
+      setSidebarError(error instanceof Error ? error.message : "Unable to delete room");
+    } finally {
+      setDeletingTargetId(null);
+    }
+  }
+
+  async function handleHideProject(projectId: string): Promise<void> {
+    setDeletingTargetId(`hide-project-${projectId}`);
+
+    try {
+      await setProjectVisibility(apiBaseUrl, projectId, false);
+      await reloadSidebar();
+      setSidebarError(null);
+      setChatError(null);
+      setOpenActionMenuId(null);
+    } catch (error) {
+      setSidebarError(error instanceof Error ? error.message : "Unable to hide project");
+    } finally {
+      setDeletingTargetId(null);
+    }
+  }
+
+  async function handleHideRoom(roomId: string): Promise<void> {
+    setDeletingTargetId(`hide-room-${roomId}`);
+
+    try {
+      await setRoomVisibility(apiBaseUrl, roomId, false);
+      await reloadSidebar();
+      setSidebarError(null);
+      setChatError(null);
+      setOpenActionMenuId(null);
+    } catch (error) {
+      setSidebarError(error instanceof Error ? error.message : "Unable to hide room");
+    } finally {
+      setDeletingTargetId(null);
+    }
   }
 
   const selectedRoomName = findSelectedRoomName(projects, selectedRoomId);
@@ -364,7 +519,34 @@ export function AppShellPage() {
             </nav>
 
             <div className="mt-8 border-t border-surface-border pt-5">
-              <p className="mb-2 px-3 text-xs uppercase tracking-[0.2em] text-surface-muted">Projects & Rooms</p>
+              <div className="mb-2 flex items-center justify-between gap-2 px-3">
+                <p className="whitespace-nowrap text-xs uppercase tracking-[0.2em] text-surface-muted">
+                  Projects & Rooms
+                </p>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => toggleActionMenu("sidebar-actions")}
+                    className="nav-item h-8 w-8 justify-center px-0 text-xl leading-none"
+                    title="Sidebar actions"
+                  >
+                    ⋯
+                  </button>
+
+                  {openActionMenuId === "sidebar-actions" ? (
+                    <div className="absolute right-0 top-9 z-20 min-w-36 rounded-md border border-surface-border bg-surface-panel p-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => void handleCreateWorkspaceRoom()}
+                        disabled={creatingProjectId === "workspace"}
+                        className="nav-item w-full text-left"
+                      >
+                        {creatingProjectId === "workspace" ? "Creating..." : "New room"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
 
               {sidebarError ? (
                 <p className="px-3 text-sm text-accent-danger">{sidebarError}</p>
@@ -375,49 +557,103 @@ export function AppShellPage() {
 
                     return (
                       <div key={project.id} className="rounded-lg border border-surface-border bg-surface-panel/65 p-1.5">
-                        <button
-                          type="button"
-                          onClick={() => toggleProject(project.id)}
-                          className="nav-item w-full justify-between text-left"
-                        >
-                          <span>{project.name}</span>
-                          <span className="text-xs text-surface-muted">{isProjectExpanded ? "▾" : "▸"}</span>
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleProject(project.id)}
+                            className="nav-item flex-1 justify-between text-left"
+                          >
+                            <span>{project.name}</span>
+                            <span className="text-base text-surface-muted">{isProjectExpanded ? "▾" : "▸"}</span>
+                          </button>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => toggleActionMenu(`project-${project.id}`)}
+                              className="nav-item h-8 w-8 justify-center px-0 text-xl leading-none"
+                              title="Project actions"
+                            >
+                              ⋯
+                            </button>
+
+                            {openActionMenuId === `project-${project.id}` ? (
+                              <div className="absolute right-0 top-9 z-20 min-w-36 rounded-md border border-surface-border bg-surface-panel p-1 shadow-lg">
+                                <button
+                                  type="button"
+                                  onClick={() => void handleCreateRoom(project.id)}
+                                  disabled={creatingProjectId === project.id}
+                                  className="nav-item w-full text-left"
+                                >
+                                  {creatingProjectId === project.id ? "Creating..." : "New room"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleHideProject(project.id)}
+                                  disabled={deletingTargetId === `hide-project-${project.id}`}
+                                  className="nav-item w-full text-left"
+                                >
+                                  {deletingTargetId === `hide-project-${project.id}` ? "Hiding..." : "Hide project"}
+                                </button>
+                                {project.memberRole === "owner" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDeleteProject(project.id)}
+                                    disabled={deletingTargetId === project.id}
+                                    className="nav-item w-full text-left"
+                                  >
+                                    {deletingTargetId === project.id ? "Deleting..." : "Delete project"}
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
 
                         {isProjectExpanded ? (
                           <div className="mt-1 space-y-1 pl-2">
                             {project.rooms.map((room) => {
-                              const isRoomExpanded = expandedRoomIds.has(room.id);
-                              const roomChannels = buildRoomChannels(room);
-
                               return (
-                                <div key={room.id} className="rounded-md border border-surface-border/60 bg-surface-base/35 p-1">
+                                <div key={room.id} className="flex items-center gap-1">
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      toggleRoom(room.id);
-                                      selectRoom(room.id);
-                                    }}
-                                    className={`nav-item w-full justify-between text-left ${selectedRoomId === room.id ? "nav-item-active" : ""}`}
+                                    onClick={() => selectRoom(room.id)}
+                                    className={`nav-item flex-1 text-left ${selectedRoomId === room.id ? "nav-item-active" : ""}`}
                                   >
-                                    <span># {room.name}</span>
-                                    <span className="text-xs text-surface-muted">{isRoomExpanded ? "▾" : "▸"}</span>
+                                    # {room.name}
                                   </button>
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleActionMenu(`room-${room.id}`)}
+                                      className="nav-item h-8 w-8 justify-center px-0 text-xl leading-none"
+                                      title="Room actions"
+                                    >
+                                      ⋯
+                                    </button>
 
-                                  {isRoomExpanded ? (
-                                    <div className="mt-1 space-y-1 pl-2">
-                                      {roomChannels.map((channel) => (
+                                    {openActionMenuId === `room-${room.id}` ? (
+                                      <div className="absolute right-0 top-9 z-20 min-w-36 rounded-md border border-surface-border bg-surface-panel p-1 shadow-lg">
                                         <button
-                                          key={`${room.id}-${channel}`}
                                           type="button"
-                                          onClick={() => selectRoom(room.id)}
-                                          className="nav-item w-full text-left text-xs"
+                                          onClick={() => void handleHideRoom(room.id)}
+                                          disabled={deletingTargetId === `hide-room-${room.id}`}
+                                          className="nav-item w-full text-left"
                                         >
-                                          · {channel}
+                                          {deletingTargetId === `hide-room-${room.id}` ? "Hiding..." : "Hide room"}
                                         </button>
-                                      ))}
-                                    </div>
-                                  ) : null}
+                                        {project.memberRole === "owner" || room.memberRole === "owner" ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => void handleDeleteRoom(room.id)}
+                                            disabled={deletingTargetId === room.id}
+                                            className="nav-item w-full text-left"
+                                          >
+                                            {deletingTargetId === room.id ? "Deleting..." : "Delete room"}
+                                          </button>
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+                                  </div>
                                 </div>
                               );
                             })}

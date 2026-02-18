@@ -7,6 +7,14 @@ type ValidateGithubAccessInput = {
   providerAccountId?: string;
 };
 
+export type GithubRepositorySummary = {
+  externalRepoId: string;
+  owner: string;
+  name: string;
+  fullName: string;
+  defaultBranch: string | null;
+};
+
 type GithubValidationResult = {
   ok: boolean;
   provider: "github";
@@ -71,6 +79,77 @@ async function resolveGithubAccount(input: ValidateGithubAccessInput) {
   }
 
   throw new Error("userId or providerAccountId is required");
+}
+
+function parseLinkHeaderNextUrl(linkHeader: string | null): string | null {
+  if (!linkHeader) {
+    return null;
+  }
+
+  const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/i);
+
+  return nextMatch?.[1] ?? null;
+}
+
+export async function listGithubRepositoriesForUser(userId: string): Promise<GithubRepositorySummary[]> {
+  const account = await resolveGithubAccount({ userId });
+
+  if (!account) {
+    return [];
+  }
+
+  const appConfig = getAppConfig();
+  const accessToken = decryptToken(account.encryptedAccessToken, appConfig);
+
+  if (!accessToken) {
+    return [];
+  }
+
+  const repositories: GithubRepositorySummary[] = [];
+  let nextUrl: string | null =
+    "https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member";
+
+  while (nextUrl) {
+    const response = await fetch(nextUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "devchat-mvp"
+      }
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = (await response.json()) as Array<{
+      id: number;
+      name: string;
+      full_name: string;
+      default_branch?: string | null;
+      owner?: { login?: string };
+    }>;
+
+    for (const repo of payload) {
+      if (!repo?.id || !repo?.name || !repo?.full_name) {
+        continue;
+      }
+
+      repositories.push({
+        externalRepoId: String(repo.id),
+        owner: repo.owner?.login ?? "unknown",
+        name: repo.name,
+        fullName: repo.full_name,
+        defaultBranch: repo.default_branch ?? null
+      });
+    }
+
+    nextUrl = parseLinkHeaderNextUrl(response.headers.get("link"));
+  }
+
+  return repositories;
 }
 
 export async function validateGithubApiAccess(

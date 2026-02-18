@@ -96,6 +96,7 @@ model Project {
   createdById String
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
   createdBy   User            @relation(fields: [createdById], references: [id], onDelete: Cascade)
   members     ProjectMember[]
   rooms       Room[]
@@ -107,6 +108,7 @@ model ProjectMember {
   userId    String
   role      String   @default("member")
   joinedAt  DateTime @default(now())
+  hiddenAt  DateTime?
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -120,6 +122,7 @@ model Room {
   repositoryId   String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
   project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   roomMembers    RoomMember[]
   messages       Message[]
@@ -132,6 +135,7 @@ model RoomMember {
   userId    String
   role      String   @default("member")
   joinedAt  DateTime @default(now())
+  hiddenAt  DateTime?
   room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
