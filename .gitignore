@@ -9,5 +9,5 @@ coverage/
 !.env.*.example
 npm-debug.log*
 
-*.db
+apps/backend/dev.db
 

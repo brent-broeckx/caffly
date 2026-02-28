@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import logoUrl from "../../assets/logo.webp";
 
 import {
   buildChatWebSocketUrl,
@@ -59,6 +60,7 @@ export function AppShellPage() {
   const [creatingProjectId, setCreatingProjectId] = useState<string | null>(null);
   const [deletingTargetId, setDeletingTargetId] = useState<string | null>(null);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const apiBaseUrl = useMemo(() => resolveApiBaseUrl(), []);
   const selectedRoomIdRef = useRef<string | null>(null);
@@ -80,6 +82,7 @@ export function AppShellPage() {
 
         setSidebarError(null);
         setProjects(payload.projects);
+        setCurrentUserId(payload.currentUser?.id ?? null);
         setSelectedRoomId((current) => {
           if (current) {
             return current;
@@ -495,14 +498,12 @@ export function AppShellPage() {
 
   return (
     <div className="app-background h-screen w-screen overflow-hidden text-surface-text">
-      <div className="grid h-full w-full grid-cols-[250px_minmax(0,1fr)] overflow-hidden">
-        <aside className="border-r border-surface-border bg-surface-panelSoft/95 p-4">
-          <div className="h-full overflow-y-auto">
-            <div className="mb-7 flex items-center gap-3 px-1">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-accent-warning/50 bg-accent-warning/20 text-lg">
-                ☕
-              </span>
-              <span className="text-4xl font-semibold tracking-tight">Codex</span>
+      <div className="grid h-full w-full grid-cols-[250px_minmax(0,1fr)] overflow-hidden py-4">
+        <aside className="sidebar px-4 py-4">
+          <div className="flex flex-col h-full">
+            <div className="mb-4 flex items-center gap-3 px-1">
+              <img src={logoUrl} alt="Caffly" className="h-8 w-8 rounded-full object-cover" />
+              <span className="text-2xl font-semibold tracking-tight">Caffly</span>
             </div>
 
             <nav className="space-y-1">
@@ -518,191 +519,233 @@ export function AppShellPage() {
               ))}
             </nav>
 
-            <div className="mt-8 border-t border-surface-border pt-5">
-              <div className="mb-2 flex items-center justify-between gap-2 px-3">
-                <p className="whitespace-nowrap text-xs uppercase tracking-[0.2em] text-surface-muted">
-                  Projects & Rooms
-                </p>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => toggleActionMenu("sidebar-actions")}
-                    className="nav-item h-8 w-8 justify-center px-0 text-xl leading-none"
-                    title="Sidebar actions"
-                  >
-                    ⋯
-                  </button>
-
-                  {openActionMenuId === "sidebar-actions" ? (
-                    <div className="absolute right-0 top-9 z-20 min-w-36 rounded-md border border-surface-border bg-surface-panel p-1 shadow-lg">
+            <div className="mt-6 border-t border-surface-border pt-4 flex-1 overflow-hidden">
+              <div className="sidebar-scroll">
+                <div className="px-3 pb-6">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="whitespace-nowrap text-xs uppercase tracking-[0.2em] text-surface-muted">
+                      Projects & Rooms
+                    </p>
+                    <div className="relative">
                       <button
                         type="button"
-                        onClick={() => void handleCreateWorkspaceRoom()}
-                        disabled={creatingProjectId === "workspace"}
-                        className="nav-item w-full text-left"
+                        onClick={() => toggleActionMenu("sidebar-actions")}
+                        className="nav-item h-8 w-8 justify-center px-0 text-xl leading-none"
+                        title="Sidebar actions"
                       >
-                        {creatingProjectId === "workspace" ? "Creating..." : "New room"}
+                        ⋯
                       </button>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
 
-              {sidebarError ? (
-                <p className="px-3 text-sm text-accent-danger">{sidebarError}</p>
-              ) : (
-                <div className="space-y-2">
-                  {projects.map((project) => {
-                    const isProjectExpanded = expandedProjectIds.has(project.id);
-
-                    return (
-                      <div key={project.id} className="rounded-lg border border-surface-border bg-surface-panel/65 p-1.5">
-                        <div className="flex items-center gap-1">
+                      {openActionMenuId === "sidebar-actions" ? (
+                        <div className="absolute right-0 top-9 z-20 min-w-36 rounded-md border border-surface-border bg-surface-panel p-1 shadow-lg">
                           <button
                             type="button"
-                            onClick={() => toggleProject(project.id)}
-                            className="nav-item flex-1 justify-between text-left"
+                            onClick={() => void handleCreateWorkspaceRoom()}
+                            disabled={creatingProjectId === "workspace"}
+                            className="nav-item w-full text-left"
                           >
-                            <span>{project.name}</span>
-                            <span className="text-base text-surface-muted">{isProjectExpanded ? "▾" : "▸"}</span>
+                            {creatingProjectId === "workspace" ? "Creating..." : "New room"}
                           </button>
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={() => toggleActionMenu(`project-${project.id}`)}
-                              className="nav-item h-8 w-8 justify-center px-0 text-xl leading-none"
-                              title="Project actions"
-                            >
-                              ⋯
-                            </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
 
-                            {openActionMenuId === `project-${project.id}` ? (
-                              <div className="absolute right-0 top-9 z-20 min-w-36 rounded-md border border-surface-border bg-surface-panel p-1 shadow-lg">
+                  {sidebarError ? (
+                    <p className="px-1 text-sm text-accent-danger">{sidebarError}</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {projects.map((project) => {
+                        const isProjectExpanded = expandedProjectIds.has(project.id);
+
+                        return (
+                          <div key={project.id} className="project-card">
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => toggleProject(project.id)}
+                                className="nav-item flex-1 text-left project-toggle"
+                                aria-expanded={isProjectExpanded}
+                              >
+                                <span className="font-medium">{project.name}</span>
+                                <span className="chevron" aria-hidden>
+                                  {isProjectExpanded ? (
+                                    <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden>
+                                      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  ) : (
+                                    <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden>
+                                      <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  )}
+                                </span>
+                              </button>
+                              <div className="relative">
                                 <button
                                   type="button"
-                                  onClick={() => void handleCreateRoom(project.id)}
-                                  disabled={creatingProjectId === project.id}
-                                  className="nav-item w-full text-left"
+                                  onClick={() => toggleActionMenu(`project-${project.id}`)}
+                                  className="nav-item h-8 w-8 justify-center px-0 text-xl leading-none"
+                                  title="Project actions"
                                 >
-                                  {creatingProjectId === project.id ? "Creating..." : "New room"}
+                                  ⋯
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleHideProject(project.id)}
-                                  disabled={deletingTargetId === `hide-project-${project.id}`}
-                                  className="nav-item w-full text-left"
-                                >
-                                  {deletingTargetId === `hide-project-${project.id}` ? "Hiding..." : "Hide project"}
-                                </button>
-                                {project.memberRole === "owner" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleDeleteProject(project.id)}
-                                    disabled={deletingTargetId === project.id}
-                                    className="nav-item w-full text-left"
-                                  >
-                                    {deletingTargetId === project.id ? "Deleting..." : "Delete project"}
-                                  </button>
+
+                                {openActionMenuId === `project-${project.id}` ? (
+                                  <div className="absolute right-0 top-9 z-20 min-w-36 rounded-md border border-surface-border bg-surface-panel p-1 shadow-lg">
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleCreateRoom(project.id)}
+                                      disabled={creatingProjectId === project.id}
+                                      className="nav-item w-full text-left"
+                                    >
+                                      {creatingProjectId === project.id ? "Creating..." : "New room"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleHideProject(project.id)}
+                                      disabled={deletingTargetId === `hide-project-${project.id}`}
+                                      className="nav-item w-full text-left"
+                                    >
+                                      {deletingTargetId === `hide-project-${project.id}` ? "Hiding..." : "Hide project"}
+                                    </button>
+                                    {project.memberRole === "owner" ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleDeleteProject(project.id)}
+                                        disabled={deletingTargetId === project.id}
+                                        className="nav-item w-full text-left"
+                                      >
+                                        {deletingTargetId === project.id ? "Deleting..." : "Delete project"}
+                                      </button>
+                                    ) : null}
+                                  </div>
                                 ) : null}
+                              </div>
+                            </div>
+
+                            {isProjectExpanded ? (
+                              <div className="mt-1 space-y-1">
+                                {project.rooms.map((room) => {
+                                  return (
+                                    <div key={room.id} className="flex items-center gap-1 room-item">
+                                      <button
+                                        type="button"
+                                        onClick={() => selectRoom(room.id)}
+                                        className={`nav-item flex-1 text-left ${selectedRoomId === room.id ? "nav-item-active" : ""}`}
+                                      >
+                                        <span className="text-sm"># {room.name}</span>
+                                      </button>
+                                      <div className="relative">
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleActionMenu(`room-${room.id}`)}
+                                          className="nav-item h-8 w-8 justify-center px-0 text-xl leading-none"
+                                          title="Room actions"
+                                        >
+                                          ⋯
+                                        </button>
+
+                                        {openActionMenuId === `room-${room.id}` ? (
+                                          <div className="absolute right-0 top-9 z-20 min-w-36 rounded-md border border-surface-border bg-surface-panel p-1 shadow-lg">
+                                            <button
+                                              type="button"
+                                              onClick={() => void handleHideRoom(room.id)}
+                                              disabled={deletingTargetId === `hide-room-${room.id}`}
+                                              className="nav-item w-full text-left"
+                                            >
+                                              {deletingTargetId === `hide-room-${room.id}` ? "Hiding..." : "Hide room"}
+                                            </button>
+                                            {project.memberRole === "owner" || room.memberRole === "owner" ? (
+                                              <button
+                                                type="button"
+                                                onClick={() => void handleDeleteRoom(room.id)}
+                                                disabled={deletingTargetId === room.id}
+                                                className="nav-item w-full text-left"
+                                              >
+                                                {deletingTargetId === room.id ? "Deleting..." : "Delete room"}
+                                              </button>
+                                            ) : null}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             ) : null}
                           </div>
-                        </div>
-
-                        {isProjectExpanded ? (
-                          <div className="mt-1 space-y-1 pl-2">
-                            {project.rooms.map((room) => {
-                              return (
-                                <div key={room.id} className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => selectRoom(room.id)}
-                                    className={`nav-item flex-1 text-left ${selectedRoomId === room.id ? "nav-item-active" : ""}`}
-                                  >
-                                    # {room.name}
-                                  </button>
-                                  <div className="relative">
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleActionMenu(`room-${room.id}`)}
-                                      className="nav-item h-8 w-8 justify-center px-0 text-xl leading-none"
-                                      title="Room actions"
-                                    >
-                                      ⋯
-                                    </button>
-
-                                    {openActionMenuId === `room-${room.id}` ? (
-                                      <div className="absolute right-0 top-9 z-20 min-w-36 rounded-md border border-surface-border bg-surface-panel p-1 shadow-lg">
-                                        <button
-                                          type="button"
-                                          onClick={() => void handleHideRoom(room.id)}
-                                          disabled={deletingTargetId === `hide-room-${room.id}`}
-                                          className="nav-item w-full text-left"
-                                        >
-                                          {deletingTargetId === `hide-room-${room.id}` ? "Hiding..." : "Hide room"}
-                                        </button>
-                                        {project.memberRole === "owner" || room.memberRole === "owner" ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => void handleDeleteRoom(room.id)}
-                                            disabled={deletingTargetId === room.id}
-                                            className="nav-item w-full text-left"
-                                          >
-                                            {deletingTargetId === room.id ? "Deleting..." : "Delete room"}
-                                          </button>
-                                        ) : null}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+            </div>
+
+            <div className="sidebar-footer mt-auto">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => toggleActionMenu("user")}
+                  className="nav-item w-full rounded-full"
+                >
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[rgba(255,167,127,0.08)]">U</span>
+                  <span className="ml-3 text-sm">Username</span>
+                </button>
+
+                {openActionMenuId === "user" ? (
+                  <div className="absolute left-4 bottom-14 z-20 min-w-36 rounded-md border border-surface-border bg-surface-panel p-1 shadow-lg">
+                    <button type="button" className="nav-item w-full text-left">Logout</button>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </aside>
 
-        <section className="flex h-full min-w-0 flex-col border-l border-surface-border bg-surface-canvas/95">
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
-            {activeSection === "Overview" ? (
-              <OverviewDashboard />
-            ) : activeSection === "Team Chat" ? (
-              <div className="h-full">
-                {isLoadingMessages ? (
-                  <section className="panel-surface p-4">
-                    <p className="text-sm text-surface-muted">Loading messages...</p>
-                  </section>
-                ) : selectedRoomId ? (
-                  <TeamChatPanel
-                    roomName={selectedRoomName}
-                    messages={messages}
-                    composerValue={composerValue}
-                    onComposerChange={setComposerValue}
-                    onSendMessage={handleSendMessage}
-                    loading={isSending}
-                  />
+        <section className="main-panel flex h-full min-w-0 flex-col">
+          <main className="min-h-0 flex-1 flex flex-col">
+            <div className="py-1">
+              <h3 className="text-sm font-medium">{selectedRoomName}</h3>
+            </div>
+
+            <div className="flex-1 min-h-0 flex">
+              <div className="flex-1 min-w-0">
+                {activeSection === "Overview" ? (
+                  <OverviewDashboard />
+                ) : activeSection === "Team Chat" ? (
+                  <div className="h-full min-h-0">
+                    {isLoadingMessages ? (
+                      <section className="panel-surface p-4">
+                        <p className="text-sm text-surface-muted">Loading messages...</p>
+                      </section>
+                    ) : selectedRoomId ? (
+                      <TeamChatPanel
+                        currentUserId={currentUserId}
+                        messages={messages}
+                        composerValue={composerValue}
+                        onComposerChange={setComposerValue}
+                        onSendMessage={handleSendMessage}
+                        loading={isSending}
+                      />
+                    ) : (
+                      <section className="panel-surface p-4">
+                        <p className="text-sm text-surface-muted">Select a room in the sidebar to start chatting.</p>
+                      </section>
+                    )}
+
+                    {chatError ? <p className="mt-2 text-sm text-accent-danger">{chatError}</p> : null}
+                  </div>
                 ) : (
                   <section className="panel-surface p-4">
-                    <p className="text-sm text-surface-muted">Select a room in the sidebar to start chatting.</p>
+                    <h2 className="text-xl font-semibold sm:text-2xl">{activeSection}</h2>
+                    <p className="mt-2 text-sm text-surface-muted">
+                      This section is scaffolded in the shell and will be implemented in upcoming roadmap tasks.
+                    </p>
                   </section>
                 )}
-
-                {chatError ? <p className="mt-2 text-sm text-accent-danger">{chatError}</p> : null}
               </div>
-            ) : (
-              <section className="panel-surface p-4">
-                <h2 className="text-xl font-semibold sm:text-2xl">{activeSection}</h2>
-                <p className="mt-2 text-sm text-surface-muted">
-                  This section is scaffolded in the shell and will be implemented in upcoming roadmap tasks.
-                </p>
-              </section>
-            )}
+            </div>
           </main>
         </section>
       </div>
