@@ -154,7 +154,7 @@ async function syncGithubRepositoryProjectForUser(params: {
     room = await prisma.room.create({
       data: {
         projectId: project.id,
-        name: params.repository.name,
+        name: "General",
         repositoryId: repository.id
       },
       select: {
@@ -162,7 +162,7 @@ async function syncGithubRepositoryProjectForUser(params: {
         name: true
       }
     });
-  } else if (room.name !== params.repository.name) {
+  } else if (room.name !== params.repository.name && room.name !== "General") {
     await prisma.room.update({
       where: {
         id: room.id
